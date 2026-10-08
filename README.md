@@ -163,3 +163,18 @@ Kendala ini menjadi pembelajaran penting mengenai pentingnya validasi hardware s
 ## 5. Kesimpulan
 
 Kombinasi ultrasonik dan IR Obstacle terbukti lebih andal dibanding PIR untuk kasus deteksi objek pada gerbang otomatis, terutama karena kemampuannya mendeteksi objek diam. Untuk aktuator, servo lebih praktis untuk prototipe skala kecil, sementara stepper motor berpotensi lebih unggul pada skala yang lebih besar dengan beban yang lebih berat, dengan catatan membutuhkan penanganan tambahan untuk kalibrasi posisi.
+
+---
+
+## Catatan Tambahan
+- **IR di Wokwi bukan FC-51 asli.** 
+
+Receiver IR Wokwi hanya memberi pulsa LOW singkat saat ada sinyal (nilai Command dan Address tidak berpengaruh), sedangkan FC-51 asli tetap LOW selama ada objek. Interrupt `gerakan_ada` bisa menangkap pulsa yang singkat itu, tetapi ini tidak merepresentasikan behavior receiver IR asli.
+
+- **Penggunaan PWM**
+
+Proyek ini tidak memakai PWM hardware. Tidak ada `analogWrite()` sama sekali.
+
+PWM sering disebut dalam pembahasan servo karena sinyal kontrol servo secara konsep mirip PWM, yaitu pulsa diulang setiap 20 ms (50 Hz) dan lebar pulsa menentukan sudut (sekitar 0,5 ms untuk 0° dan 1,5 ms untuk 90°). Namun fitur PWM Arduino tidak kita gunakan. Library `Servo` membangkitkan pulsa itu sendiri dengan interrupt Timer1 pada pin 9, dan kita hanya memanggil `gerbang.write(sudut)`. Timer2 dipakai sebagai penghitung waktu 1 ms (mode CTC), bukan untuk menghasilkan PWM.
+
+Efek sampingnya, library Servo menonaktifkan `analogWrite()` di pin 9 dan 10, dan karena Timer2 dipakai untuk tick, `analogWrite()` di pin 3 dan 11 juga akan bentrok.
