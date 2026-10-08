@@ -167,7 +167,7 @@ Kombinasi ultrasonik dan IR Obstacle terbukti lebih andal dibanding PIR untuk ka
 ---
 
 ## Catatan Tambahan
-- **IR di Wokwi bukan FC-51 asli.** 
+- **IR di Wokwi bukan FC-51 asli** 
 
 Receiver IR Wokwi hanya memberi pulsa LOW singkat saat ada sinyal (nilai Command dan Address tidak berpengaruh), sedangkan FC-51 asli tetap LOW selama ada objek. Interrupt `gerakan_ada` bisa menangkap pulsa yang singkat itu, tetapi ini tidak merepresentasikan behavior receiver IR asli.
 
