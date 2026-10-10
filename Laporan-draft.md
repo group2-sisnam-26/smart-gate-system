@@ -22,7 +22,7 @@ Laporan ini bertujuan untuk mengeksplorasi karakteristik sensor ultrasonik, PIR,
    Mengukur jarak dengan memancarkan gelombang suara ultrasonik (umumnya 40 kHz) lewat _transmitter_, lalu menghitung waktu tempuh gelombang tersebut hingga memantul kembali dan diterima oleh _receiver_. Waktu tempuh ini dikonversi menjadi jarak. Pada modul PING))), proses _trigger_ dan penerimaan pantulan (echo) menggunakan satu pin sinyal yang sama secara bergantian.
 
 2. **IR Obstacle (FC-51)**
-   Modul ini memancarkan cahaya infrared lewat LED _transmitter_ (bening) dan mendeteksi pantulannya menggunakan fototransistor _receiver_ (gelap/hitam). Jika ada objek dalam jangkauan jarak pendek di depannya, cahaya memantul dan terdeteksi. Output sensor akan berubah menjadi LOW melalui komparator (LM393).
+   Modul ini memancarkan cahaya infrared lewat LED _transmitter_ (bening) dan mendeteksi pantulannya menggunakan fotodioda receiver (gelap/hitam). Jika ada objek dalam jangkauan jarak pendek di depannya, cahaya memantul dan terdeteksi. Output sensor akan berubah menjadi LOW melalui komparator (LM393).
 
 3. **PIR (HC-SR501)**
    Mendeteksi perubahan radiasi inframerah pasif yang dipancarkan oleh objek bersuhu (seperti tubuh manusia atau mesin kendaraan) yang bergerak. Output berupa sinyal digital HIGH saat gerakan terdeteksi, dan kembali LOW setelah durasi waktu (delay) yang diatur terlampaui. Sensor mendeteksi _gerakan_, bukan eksistensi objek diam.
@@ -100,7 +100,7 @@ Berikut adalah spesifikasi teknis dari komponen yang digunakan (referensi dari s
 Agar sistem berjalan optimal, antarmuka ke mikrokontroler memanfaatkan berbagai fitur perangkat keras khusus Arduino Mega:
 
 1. **Timer/Counter (Timer2):** Digunakan untuk melakukan _tick_ internal (menghitung waktu tanpa _blocking_) melalui fitur **Interrupt (ISR)**. Timer2 diatur pada mode CTC dengan prescaler 64 untuk memicu _interrupt_ secara presisi setiap 1 milidetik (`ISR(TIMER2_COMPA_vect)`).
-2. **External Interrupt (INT4 pada Pin 2):** Pin sinyal FC-51 dihubungkan ke fitur External Interrupt Arduino (`attachInterrupt`). Mode diatur ke `FALLING` agar mikrokontroler segera merespons seketika saat sinyal berubah dari HIGH ke LOW (objek terdeteksi) tanpa perlu melakukan _polling_ secara terus-menerus di fungsi `loop()`.
+2. **External Interrupt (INT4 pada Pin 2):** Pin sinyal FC-51 dihubungkan ke fitur External Interrupt Arduino (`attachInterrupt`). Mode diatur ke `FALLING` agar mikrokontroler segera merespons seketika saat sinyal berubah dari HIGH ke LOW (objek terdeteksi) sebagai jalur cepat. Sebagai cadangan, state `TUNGGU_IR` juga membaca `digitalRead(pin_ir) == LOW`, karena jika IR sudah LOW sebelum state ini dimulai, tidak ada tepi `FALLING` yang memicu *interrupt*.
 3. **GPIO Digital (I/O):** Digunakan untuk dua hal:
    - **Membaca jarak:** Pin 4 Arduino difungsikan secara bergantian sebagai _OUTPUT_ (untuk trigger pulsa 5µs) dan sebagai _INPUT_ untuk membaca durasi gema pantulan via fungsi `pulseIn()`.
    - **Menggerakkan Stepper:** Menggunakan 4 pin GPIO sebagai _OUTPUT_ digital untuk mengaktifkan koil stepper motor secara berurutan.
@@ -372,7 +372,7 @@ Dalam rancangan awal, sistem direncanakan menggunakan ultrasonik sebagai penentu
 ### 2. Karakterisasi Aktuator: Servo vs Stepper
 
 - **Servo SG90:** Sangat ideal untuk palang gerbang prototipe berskala kecil. Sifat kendalinya yang _closed-loop_ dan pemanfaatan PWM langsung membuatnya dapat bergerak dari sudut 0° ke 90° dengan satu baris perintah `gerbang.write()`.
-- **Stepper 28BYJ-48:** Menawarkan kestabilan torsi saat diam (_holding torque_) namun memerlukan manajemen langkah (step) yang spesifik. Pada eksperimen serial, sistem membuktikan bahwa pergerakan bergantung pada pulsa `runToPosition()` yang harus selalu dipanggil untuk mencapai posisi yang ditargetkan tanpa _feedback_ posisi asli.
+- **Stepper 28BYJ-48:** Menawarkan kestabilan torsi saat diam (_holding torque_) namun memerlukan manajemen langkah (step) yang spesifik. Pada eksperimen serial, sistem membuktikan bahwa runToPosition() bersifat blocking: ia memanggil run() berulang sampai posisi target tercapai. Karena itu loop() tidak bisa melakukan hal lain selama motor bergerak, dan tidak ada umpan balik posisi nyata.
 
 ### 3. Kesimpulan
 
@@ -394,7 +394,7 @@ Selama pengujian tidak ditemukan reading yang menyebabkan perubahan status kenda
 
 ### 2. Servo Menutup Lalu Mobil Terdeteksi Lagi
 
-Pada kode saat ini, `tutup_gerbang()` langsung mengubah `status = TUTUP`, padahal servo masih bergerak selama beberapa ratus ms. Program menganggap palang sudah tertutup dan tidak memantau sensor pada masa itu. Jika mobil mundur tepat saat palang turun, palang akan menabrak mobil.
+Pada kode saat ini, `tutup_gerbang()` langsung mengubah `status = TUTUP`, padahal servo masih bergerak selama beberapa ratus ms. Program langsung masuk state TUTUP, yang tidak punya logika pembatalan. Jika mobil terdeteksi saat servo masih bergerak, state hanya berpindah ke TUNGGU_IR dan palang baru membuka setelah IR terpicu lagi, sehingga palang tetap turun ke arah mobil. Jika mobil mundur tepat saat palang turun, palang akan menabrak mobil.
 
 Perbaikannya adalah menambah state **`MENUTUP`**:
 
@@ -455,7 +455,7 @@ Sensor ini tidak secara khusus memastikan bahwa seluruh area pergerakan palang b
 
 Oleh karena itu, sensor ultrasonik lebih sesuai untuk mendeteksi keberadaan kendaraan daripada sebagai sensor keselamatan utama. Untuk meningkatkan keselamatan, dapat digunakan **safety photo-eye**. Photo-eye menggunakan transmitter dan receiver inframerah, selama jalur sinyal tidak terhalang, palang dapat menutup, sedangkan objek yang memotong jalur sinyal akan langsung terdeteksi dan dapat menyebabkan palang berhenti atau kembali terbuka.
 
-- **Servo tidak punya umpan balik posisi** 
+- **Arduino tidak menerima umpan balik posisi dari servo (loop tertutup hanya terjadi di dalam servo), sehingga waktu_servo_ms hanya perkiraan dan harus disetel. Dari datasheet, 0,12 s/60° berarti sekitar 0,18 s untuk 90° tanpa beban.** 
 
 `waktu_servo_ms` hanya perkiraan dan harus disetel sesuai servo yang dipakai.
 

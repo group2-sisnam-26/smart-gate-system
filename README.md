@@ -26,7 +26,7 @@ Laporan ini bertujuan untuk mengeksplorasi karakteristik sensor ultrasonik, PIR,
 1. **Ultrasonic Sensor (PING))) / HC-SR04)**  
    Mengukur jarak dengan memancarkan gelombang suara ultrasonik (umumnya 40 kHz) lewat *transmitter*, lalu menghitung waktu tempuh gelombang tersebut hingga memantul kembali dan diterima oleh *receiver*. Waktu tempuh ini dikonversi menjadi jarak. Pada modul PING))), proses *trigger* dan penerimaan pantulan (*echo*) menggunakan satu pin sinyal yang sama secara bergantian.
 2. **IR Obstacle (FC-51)**  
-   Modul ini memancarkan cahaya infrared lewat LED *transmitter* (bening) dan mendeteksi pantulannya menggunakan fototransistor *receiver* (gelap/hitam) yang sekaligus berfungsi sebagai filter cahaya tampak agar deteksi lebih akurat. Jika ada objek dalam jangkauan jarak pendek di depannya, cahaya memantul dan terdeteksi. Output sensor akan berubah menjadi LOW melalui komparator (LM393). Sinyal ini bersifat digital sederhana, cocok dipakai sebagai trigger interrupt untuk respons cepat.
+   Modul ini memancarkan cahaya infrared lewat LED *transmitter* (bening) dan mendeteksi pantulannya menggunakan *fotodioda* receiver (gelap/hitam) yang sekaligus berfungsi sebagai filter cahaya tampak agar deteksi lebih akurat. Jika ada objek dalam jangkauan jarak pendek di depannya, cahaya memantul dan terdeteksi. Output sensor akan berubah menjadi LOW melalui komparator (LM393). Sinyal ini bersifat digital sederhana, cocok dipakai sebagai trigger interrupt untuk respons cepat.
 3. **PIR (HC-SR501)**  
    Mendeteksi perubahan radiasi inframerah *pasif* yang dipancarkan oleh objek bersuhu (seperti tubuh manusia atau mesin kendaraan) yang bergerak dalam jangkauannya. Output berupa sinyal digital HIGH saat gerakan terdeteksi, dan kembali LOW setelah durasi waktu (*delay*) yang diatur terlampaui. Sensor mendeteksi *gerakan*, bukan eksistensi objek diam.
 4. **Servo Motor (SG90)**  
@@ -93,11 +93,11 @@ Berikut adalah spesifikasi teknis dari komponen yang digunakan (referensi dari s
 ## D. Koneksi dengan Fitur Mikrokontroler
 Agar sistem berjalan optimal, antarmuka ke mikrokontroler memanfaatkan berbagai fitur perangkat keras khusus Arduino Mega:
 1. **Timer/Counter (Timer2):** Digunakan untuk melakukan *tick* internal (menghitung waktu tanpa *blocking*) melalui fitur **Interrupt (ISR)**. Timer2 diatur pada mode CTC dengan prescaler 64 untuk memicu *interrupt* secara presisi setiap 1 milidetik (`ISR(TIMER2_COMPA_vect)`).
-2. **External Interrupt (INT4 pada Pin 2):** Pin sinyal FC-51 dihubungkan ke fitur External Interrupt Arduino (`attachInterrupt`). Mode diatur ke `FALLING` agar mikrokontroler segera merespons seketika saat sinyal berubah dari HIGH ke LOW (objek terdeteksi) tanpa perlu melakukan *polling* secara terus-menerus di fungsi `loop()`.
+2. **External Interrupt (INT4 pada Pin 2):** Pin sinyal FC-51 dihubungkan ke fitur External Interrupt Arduino (`attachInterrupt`). Mode diatur ke `FALLING` agar mikrokontroler segera merespons seketika saat sinyal berubah dari HIGH ke LOW (objek terdeteksi) sebagai jalur cepat. Sebagai cadangan, state `TUNGGU_IR` juga membaca `digitalRead(pin_ir) == LOW`, karena jika IR sudah LOW sebelum state ini dimulai, tidak ada tepi `FALLING` yang memicu *interrupt*.
 3. **GPIO Digital (I/O):** Digunakan untuk dua hal:
    * **Membaca jarak:** Pin 4 Arduino difungsikan secara bergantian sebagai *OUTPUT* (untuk trigger pulsa 5µs) dan sebagai *INPUT* untuk membaca durasi gema pantulan via fungsi `pulseIn()`.
    * **Menggerakkan Stepper:** Menggunakan 4 pin GPIO sebagai *OUTPUT* digital untuk mengaktifkan koil stepper motor secara berurutan.
-4. **Timer untuk Sinyal Servo (Timer5 via Servo.h):** Library `Servo.h` membangkitkan sinyal kontrol 50 Hz (pulsa 1-2 ms) di pin 9 menggunakan interrupt timer internal (Timer5 pada Arduino Mega), sehingga tidak bentrok dengan Timer2 yang dipakai untuk tick 1 ms.
+4. **Timer untuk Sinyal Servo (Timer5 via Servo.h):** Library Servo membangkitkan pulsa itu sendiri dengan interrupt Timer5 (pada Arduino Mega) di pin 9 menggunakan interrupt timer internal (Timer5 pada Arduino Mega), sehingga tidak bentrok dengan Timer2 yang dipakai untuk tick 1 ms.
 5. **UART / Serial Communication:** Menggunakan hardware UART (melalui kabel USB ke PC) pada *baud rate* 115200 (untuk sistem gate) dan 9600 (untuk eksperimen stepper) untuk keperluan *debugging*, input bilangan via Serial Monitor, dan laporan status.
 
 --------------------------------------------------------------------------------
@@ -370,7 +370,7 @@ void loop() {
 
 ### 1. Karakterisasi Sensor: PIR vs IR Obstacle
 Dalam rancangan awal, sistem direncanakan menggunakan ultrasonik sebagai penentu jarak dan PIR sebagai konfirmator. Namun dalam proses eksperimen ditemukan karakteristik fundamental yang membedakan kinerja keduanya pada skenario *Smart Gate*:
-* **PIR (HC-SR501):** Mendeteksi gerakan secara inframerah pasif (panas tubuh). Kelemahan utamanya adalah sensor ini **dapat mendeteksi semua objek yang memancarkan inframerah**. Sehingga jika ada sumber panas lain di sekitar (misal: matahari, lampu, atau kendaraan lain), sensor ini akan memberikan sinyal HIGH yang menandakan adanya objek bergerak. Selain itu, PIR memiliki *warm-up delay* 30-60 detik saat pertama kali dihidupkan, sehingga tidak dapat merespons secara instan.
+* **PIR (HC-SR501):** Mendeteksi gerakan secara inframerah pasif (panas tubuh). Kelemahan utamanya adalah sensor ini **mendeteksi semua perubahan pancaran inframerah di lingkungannya**. Sehingga jika ada sumber panas lain di sekitar (misal: matahari, lampu, atau kendaraan lain), sensor ini akan memberikan sinyal HIGH yang menandakan adanya objek bergerak. Selain itu, PIR memiliki *warm-up delay* 30-60 detik saat pertama kali dihidupkan, sehingga tidak dapat merespons secara instan.
 * **IR Obstacle (FC-51):** Beroperasi secara aktif memancarkan dan menerima cahaya. Sensor ini **hanya merespons objek yang berada di depannya dalam jarak pendek**. Outputnya LOW saat ada objek, dan HIGH saat normal. Sensor ini sangat reaktif dan dapat digunakan untuk konfirmasi cepat (via *Interrupt*) tanpa jeda pemanasan.
 
 **Tabel Komparasi Perbedaan Mendasar Sensor:**
@@ -402,7 +402,7 @@ Pada sistem integrasi, FC-51 berperan sebagai konfirmasi kedua setelah ultrasoni
 | ------ | ------ | ------ |
 | Sistem Kontrol | Open-loop (tidak tahu posisi sendiri) | Closed-loop (tahu posisi sendiri) |
 | Torsi & RPM | Torsi tinggi di RPM rendah, turun di RPM tinggi | Torsi stabil dari RPM rendah sampai tinggi |
-| Kecepatan | Rendah–sedang (umumnya < 1000–2000 RPM) | Sangat tinggi dan responsif |
+| Kecepatan | Rendah–sedang, Stepper 28BYJ-48 dengan maxSpeed 1000 steps/s (4096 steps/putaran) ≈ 14,6 RPM. | Sangat tinggi dan responsif, Servo SG90 0,12 s/60° ≈ 83 RPM tanpa beban. |
 | Risiko Operasional | Step bisa terskip jika beban terlalu berat (kalibrasi kacau) | Mengoreksi posisi otomatis jika ada hambatan |
 | Holding Torque & Arus | Bisa menahan beban tinggi saat diam, tapi terus menarik arus walau diam | Menarik arus hanya saat bergerak atau ada beban eksternal |
 
@@ -425,11 +425,10 @@ Berdasarkan analisa kebutuhan state `TUNGGU_IR` (menunggu konfirmasi sebelum ger
 
 Kendala ini menjadi pembelajaran penting mengenai pentingnya **validasi hardware** sebelum diintegrasikan ke sistem yang lebih besar, serta pertimbangan karakteristik sensor (pasif vs aktif, objek diam vs bergerak) dalam menentukan desain *state machine* yang sesuai.
 
-<<<<<<< HEAD
 ### 5. Kesimpulan Final
 1. Kombinasi sensor **PING))) Ultrasonik + FC-51 IR Obstacle** terbukti paling ideal, tangguh (*robust*), dan andal dibanding PIR untuk kasus deteksi objek pada gerbang otomatis, terutama karena kemampuannya mendeteksi objek diam serta meminimalisir status deteksi yang salah (*false positive*).
 2. Untuk aktuator, **Servo SG90** lebih praktis dan memadai untuk prototipe skala kecil. Sementara **Stepper Motor 28BYJ-48** berpotensi lebih unggul pada skala yang lebih besar dengan beban yang lebih berat, dengan catatan membutuhkan penanganan tambahan untuk kalibrasi posisi (*homing*) dan driver tambahan.
-=======
+
 **Komponen**
 - 1x Arduino Mega
 - 1x Servo SG-90
@@ -510,4 +509,4 @@ Proyek ini tidak memakai PWM hardware. Tidak ada `analogWrite()` sama sekali.
 
 PWM sering disebut dalam pembahasan servo karena sinyal kontrol servo secara konsep mirip PWM, yaitu pulsa diulang setiap 20 ms (50 Hz) dan lebar pulsa menentukan sudut (sekitar 0,5 ms untuk 0° dan 1,5 ms untuk 90°). Namun fitur PWM Arduino tidak kita gunakan. Library `Servo` membangkitkan pulsa itu sendiri dengan interrupt Timer1 pada pin 9, dan kita hanya memanggil `gerbang.write(sudut)`. Timer2 dipakai sebagai penghitung waktu 1 ms (mode CTC), bukan untuk menghasilkan PWM.
 
-Efek sampingnya, library Servo menonaktifkan `analogWrite()` di pin 9 dan 10, dan karena Timer2 dipakai untuk tick, `analogWrite()` di pin 3 dan 11 juga akan bentrok.
+Pada Mega, library `Servo` menonaktifkan `analogWrite()` di *pin 44, 45, dan 46*, dan karena `Timer2` dipakai untuk `tick`, `analogWrite()` di *pin 9 dan 10* juga akan bentrok.
