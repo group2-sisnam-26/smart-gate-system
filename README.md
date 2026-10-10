@@ -511,4 +511,3 @@ Proyek ini tidak memakai PWM hardware. Tidak ada `analogWrite()` sama sekali.
 PWM sering disebut dalam pembahasan servo karena sinyal kontrol servo secara konsep mirip PWM, yaitu pulsa diulang setiap 20 ms (50 Hz) dan lebar pulsa menentukan sudut (sekitar 0,5 ms untuk 0° dan 1,5 ms untuk 90°). Namun fitur PWM Arduino tidak kita gunakan. Library `Servo` membangkitkan pulsa itu sendiri dengan interrupt Timer1 pada pin 9, dan kita hanya memanggil `gerbang.write(sudut)`. Timer2 dipakai sebagai penghitung waktu 1 ms (mode CTC), bukan untuk menghasilkan PWM.
 
 Efek sampingnya, library Servo menonaktifkan `analogWrite()` di pin 9 dan 10, dan karena Timer2 dipakai untuk tick, `analogWrite()` di pin 3 dan 11 juga akan bentrok.
->>>>>>> 8058ecf36d05d691c663ae4a65b0b913279b7acf
