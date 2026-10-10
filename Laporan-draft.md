@@ -10,7 +10,7 @@
 
 ## A. Pendahuluan
 
-Smart Gate System adalah prototi sistem tertanam yang bertujuan untuk mendeteksi keberadaan dan jarak objek menggunakan kombinasi sensor ultrasonik dan sensor infrared (IR Obstacle). Sistem ini memproses data sensor untuk kemudian menggerakkan motor servo sebagai aktuator yang membuka atau menutup gerbang secara otomatis.
+Smart Gate System adalah prototipe sistem tertanam yang bertujuan untuk mendeteksi keberadaan dan jarak objek menggunakan kombinasi sensor ultrasonik dan sensor infrared (IR Obstacle). Sistem ini memproses data sensor untuk kemudian menggerakkan motor servo sebagai aktuator yang membuka atau menutup gerbang secara otomatis.
 
 Laporan ini bertujuan untuk mengeksplorasi karakteristik sensor ultrasonik, PIR, dan infrared dalam mendeteksi objek, mengintegrasikannya dengan aktuator (servo dan stepper motor), serta menganalisis spesifikasi teknis dan antarmuka komponen tersebut dengan mikrokontroler Arduino Mega.
 
@@ -104,7 +104,7 @@ Agar sistem berjalan optimal, antarmuka ke mikrokontroler memanfaatkan berbagai 
 3. **GPIO Digital (I/O):** Digunakan untuk dua hal:
    - **Membaca jarak:** Pin 4 Arduino difungsikan secara bergantian sebagai _OUTPUT_ (untuk trigger pulsa 5µs) dan sebagai _INPUT_ untuk membaca durasi gema pantulan via fungsi `pulseIn()`.
    - **Menggerakkan Stepper:** Menggunakan 4 pin GPIO sebagai _OUTPUT_ digital untuk mengaktifkan koil stepper motor secara berurutan.
-4. **Hardware PWM / Timer1:** Library `Servo.h` secara internal menggunakan Timer mikrokontroler untuk membangkitkan sinyal PWM dengan frekuensi spesifik (50 Hz) di Pin 9 untuk menahan dan menggerakkan Servo pada sudut yang diinginkan.
+4. **Timer untuk Sinyal Servo (Timer5 via `Servo.h`):** Library `Servo.h` membangkitkan sinyal kontrol 50 Hz (pulsa 1-2 ms) di pin 9 menggunakan interrupt timer internal (Timer5 pada Arduino Mega), sehingga tidak bentrok dengan Timer2 yang dipakai untuk tick 1 ms.
 5. **UART / Serial Communication:** Menggunakan hardware UART (melalui kabel USB ke PC) pada _baud rate_ 115200 (untuk sistem gate) dan 9600 (untuk eksperimen stepper) untuk keperluan _debugging_, input bilangan via Serial Monitor, dan laporan status.
 
 ---
@@ -365,7 +365,7 @@ Dalam rancangan awal, sistem direncanakan menggunakan ultrasonik sebagai penentu
 - **PIR (HC-SR501):** Mendeteksi gerakan secara inframerah pasif (panas tubuh). Kelemahan utamanya adalah sensor ini **dapat mendeteksi semua objek yang memancarkan inframerah**. Sehingga jika ada sumber panas lain di sekitar (misal: matahari, lampu, atau kendaraan lain), sensor ini akan memberikan sinyal HIGH yang menandakan adanya objek bergerak. Selain itu, PIR memiliki _warm-up delay_ 30-60 detik saat pertama kali dihidupkan, sehingga tidak dapat merespons secara instan.
 - **IR Obstacle (FC-51):** Beroperasi secara aktif memancarkan dan menerima cahaya. Sensor ini **hanya merespons objek yang berada di depannya dalam jarak pendek**. Outputnya LOW saat ada objek, dan HIGH saat normal. Sensor ini sangat reaktif dan dapat digunakan untuk konfirmasi cepat (via _Interrupt_) tanpa jeda pemanasan.
 
-**Kendala Eksperimental:** Modul PIR yang diuji coba mengalami cacat produksi (output secara konstan _latch_ di posisi HIGH), meskipun pengaturan sensitivitas maupun mode jumbper (L/H) telah dikalibrasi. Hal ini menyebabkan sistem merespons bahwa selalu ada objek.
+**Kendala Eksperimental:** Modul PIR yang diuji coba diduga rusak (output secara konstan _latch_ di posisi HIGH), meskipun pengaturan sensitivitas maupun mode jumper (L/H) telah dikalibrasi. Hal ini menyebabkan sistem merespons bahwa selalu ada objek.
 
 **Solusi:** Berdasarkan analisa kebutuhan state `TUNGGU_IR` (menunggu konfirmasi sebelum gerbang benar-benar terbuka) yang mensyaratkan deteksi objek yang sedang diam (menunggu), sistem difinalisasi dengan memadukan **PING))) Ultrasonik + FC-51 IR Obstacle**. IR FC-51 bertindak sangat reaktif (dihubungkan via _Interrupt_) yang merespons seketika tanpa jeda pemanasan (warm-up delay 30-60 detik yang biasanya dialami PIR).
 
@@ -376,4 +376,4 @@ Dalam rancangan awal, sistem direncanakan menggunakan ultrasonik sebagai penentu
 
 ### 3. Kesimpulan
 
-Untuk sistem palang gerbang cepat (_boom gate_), aktuator servo jauh lebih efisien dalam hal penulisan algoritma karena tidak membutuhkan sensor mekanis limit-switch tambahan untuk kalibrasi (homing) lokasi 0° seperti halnya Stepper. Kombinasi sensor Ultrasonik dan sensor IR Obstacle terbukti paling ideal dan tangguh (_robust_) untuk menciptakan integrasi _Smart Gate_ yang aman, karena meminimalisir status deteksi yang salah (_false positive_) saat tidak ada kendaraan.
+Untuk sistem palang gerbang cepat (_boom gate_), aktuator servo jauh lebih efisien dalam hal penulisan algoritma karena tidak membutuhkan sensor mekanis limit-switch tambahan untuk kalibrasi (homing) lokasi 0° seperti halnya Stepper. Kombinasi sensor Ultrasonik dan sensor IR Obstacle berdasarkan pengamatan paling ideal dan tangguh (_robust_) untuk menciptakan integrasi _Smart Gate_ yang aman, karena meminimalisir status deteksi yang salah (_false positive_) saat tidak ada kendaraan.
