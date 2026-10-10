@@ -376,4 +376,106 @@ Dalam rancangan awal, sistem direncanakan menggunakan ultrasonik sebagai penentu
 
 ### 3. Kesimpulan
 
-Untuk sistem palang gerbang cepat (_boom gate_), aktuator servo jauh lebih efisien dalam hal penulisan algoritma karena tidak membutuhkan sensor mekanis limit-switch tambahan untuk kalibrasi (homing) lokasi 0° seperti halnya Stepper. Kombinasi sensor Ultrasonik dan sensor IR Obstacle berdasarkan pengamatan paling ideal dan tangguh (_robust_) untuk menciptakan integrasi _Smart Gate_ yang aman, karena meminimalisir status deteksi yang salah (_false positive_) saat tidak ada kendaraan.
+Untuk sistem palang gerbang cepat (_boom gate_), aktuator servo jauh lebih efisien dalam hal penulisan algoritma karena tidak membutuhkan sensor mekanis limit-switch tambahan untuk kalibrasi (homing) lokasi 0° seperti halnya Stepper. Kombinasi sensor Ultrasonik dan sensor IR Obstacle terbukti paling ideal dan tangguh (_robust_) untuk menciptakan integrasi _Smart Gate_ yang aman, karena meminimalisir status deteksi yang salah (_false positive_) saat tidak ada kendaraan.
+
+---
+
+## H. Keterbatasan dan Pengembangan Selanjutnya
+
+### 1. Interval Pembacaan Sensor (100 ms)
+
+Variabel `mobil_dekat` diperbarui setiap 100 ms, sehingga perubahan kondisi kendaraan baru dapat terdeteksi pada pembacaan berikutnya. Dalam worst-case, waktu respons dapat mencapai sekitar 125 ms, yaitu interval 100 ms ditambah waktu tunggu `pulseIn()` hingga 25 ms.
+
+Interval 100 ms dipilih sebagai balance antara responsivitas dan kestabilan sistem. Pembacaan HC-SR04 menggunakan `pulseIn()` yang bersifat *blocking*, sehingga Arduino akan menunggu hingga menerima sinyal *echo* atau mencapai timeout. Dengan timeout 25 ms, `loop()` dapat tertahan hingga 25 ms pada pembacaan yang tidak menerima pantulan.
+
+Timeout tersebut sebenarnya lebih besar dari kebutuhan sistem karena kendaraan hanya dianggap dekat pada jarak kurang dari 30 cm. Timeout sekitar 5 ms sudah mencakup jarak hingga sekitar 86 cm, sehingga dapat mengurangi waktu *blocking* tanpa mengubah logika deteksi kendaraan.
+
+Selama pengujian tidak ditemukan reading yang menyebabkan perubahan status kendaraan secara keliru, sehingga sistem saat ini tidak menggunakan *debouncing* atau filtering tambahan untuk menghilangkan reading yang keliru (misal 10cm, 10cm, 67cm, 10cm).
+
+### 2. Servo Menutup Lalu Mobil Terdeteksi Lagi
+
+Pada kode saat ini, `tutup_gerbang()` langsung mengubah `status = TUTUP`, padahal servo masih bergerak selama beberapa ratus ms. Program menganggap palang sudah tertutup dan tidak memantau sensor pada masa itu. Jika mobil mundur tepat saat palang turun, palang akan menabrak mobil.
+
+Perbaikannya adalah menambah state **`MENUTUP`**:
+
+- Setelah `jeda_tutup_ms` selesai, servo diperintahkan ke posisi tutup dan state berpindah ke `MENUTUP` (bukan langsung `TUTUP`).
+- Selama `MENUTUP` (sesuaikan dengan waktu gerak servo), jika `mobil_dekat` bernilai true, maka palang dibuka kembali (*auto-reverse*) dan state kembali ke `TERBUKA`.
+- Jika sampai `waktu_servo_ms` tidak ada mobil, state berubah menjadi `TUTUP`.
+
+Ini akan membuat palang membuka lagi **saat sedang menutup** jika ada objek yang terdeteksi lagi. 
+
+Tetapi mungkin saja benda tersebut adalah mobil lain dibelakangnya, sehingga sebaiknya **ditambahkan sensor lagi** yang mendeteksi ini yang berada tepat di bawah palang dan **memakai variabel yang berbeda** dari `mobil_dekat` sebelumnya (misalnya `mobil_bawah_palang`).
+
+### 3. Waktu Tunda Penutupan (`jeda_tutup_ms`)
+
+Dengan nilai 3 detik, palang tetap terbuka cukup lama setelah kendaraan lewat. Mobil berkecepatan 2 m/s sudah menempuh 6 m dalam waktu itu, sehingga kendaraan di belakangnya dapat ikut masuk tanpa tiket (*tailgating*). Selain itu, pada state `JEDA_TUTUP`, kendaraan kedua yang terdeteksi oleh `mobil_dekat` membuat state kembali ke `TERBUKA`, sehingga diperlakukan sama dengan kendaraan pertama.
+
+Nilai yang terlalu pendek juga bermasalah, karena kendaraan yang sudah tidak terlihat sensor belum tentu sudah lolos dari palang.
+
+Sebagai contoh, jarak 1 m dan kecepatan 2 m/s memberi sekitar 0,5s, ditambah margin 0,5-1s. Jadi 1-1,5 detik sudah cukup untuk mobil, dan 3 detik terlalu panjang. Namun, memperpendek waktu hanya mempersempit jendela *tailgating*, kendaraan yang mengikuti dengan jarak 1-2 m masih bisa lolos. 
+
+Perbaikan yang lebih bagus adalah memakai sensor di bawah palang (`mobil_bawah_palang`) yang sudah dibahas pada bagian 2, dengan pembagian tugas berikut:
+
+- **`mobil_dekat`** (sensor di depan gerbang) hanya dipakai untuk mendeteksi kendaraan yang datang dan meminta tiket. Pada `JEDA_TUTUP`, nilai `mobil_dekat` yang true tidak lagi otomatis mengembalikan state ke `TERBUKA`. Kendaraan berikutnya wajib melakukan *tap* IR (tiket) lagi.
+- **`mobil_bawah_palang`** (sensor tepat di bawah palang) dipakai untuk memastikan jalur palang kosong. Palang baru mulai menutup setelah sensor ini tidak mendeteksi apa pun selama `jeda_tutup_ms`, bukan semata-mata berdasarkan timer sejak `mobil_dekat` hilang. Jika sensor ini aktif saat `MENUTUP`, palang membuka kembali (*auto-reverse*).
+
+Dengan pembagian ini, `JEDA_TUTUP` bisa dipersingkat ke 1-1,5 detik tanpa risiko palang menutup di atas kendaraan, dan kendaraan di belakang tidak otomatis dianggap sebagai kendaraan pertama.
+
+Harus dicatat bahwa `MENUTUP` (auto-reverse) tetap dapat membuka palang untuk kendaraan yang mengikuti, karena sensor di bawah palang tidak bisa membedakan kendaraan pertama dari kendaraan kedua.
+
+### 4. Mobil dan Motor
+
+Sistem ini difokuskan pada mobil karena mobil adalah target ultrasonik yang jauh lebih mudah. Jika motor ingin didukung, beberapa hal perlu diubah:
+
+| Aspek | Mobil | Motor | Perubahan |
+|---|---|---|---|
+| Pantulan ultrasonik | Badan lebar dan rata, pantulan baik | Sempit dan melengkung, banyak sudut yang memantulkan gema menjauh | Uji di lapangan, mungkin perlu sensor tambahan atau posisi lebih rendah |
+| Tinggi sensor | Setinggi bumper | Setinggi bodi motor | Sesuaikan posisi sensor |
+| Kecepatan | Akselerasi lebih lambat | Akselerasi biasaya cepat | Interval baca lebih pendek |
+| `jarak_mobil_cm` | 30 cm cukup | Perlu lebih besar karena gerakan cepat | Naikkan, misalnya 50 cm |
+| `jeda_tutup_ms` | 1-1,5s | Lebih pendek, sekitar 0,5-1s | Setel per jenis kendaraan |
+| Keselamatan | Palang mengenai bodi mobil | Palang bisa mengenai pengendara, risiko cedera lebih tinggi | Servo lebih lambat dan palang lebih ringan |
+
+Jika sistem dipakai untuk keduanya, parameter sebaiknya dipisah per jenis kendaraan:
+
+```cpp
+// contoh untuk motor
+const uint16_t jarak_kendaraan_cm = 50;
+const uint16_t jeda_tutup_ms      = 800;
+const uint16_t interval_baca_ms   = 50;
+```
+
+Sebaiknya jalur mobil dan motor dipisah, supaya mereka punya parameter dan posisi sensor sendiri.
+
+### 5. Keterbatasan yang Masih Ada
+
+- **Sensor di depan gerbang (`mobil_dekat`) hanya mendeteksi keberadaan objek berdasarkan pantulan ultrasonik**
+
+Sensor ini tidak secara khusus memastikan bahwa seluruh area pergerakan palang bebas dari objek. Bahkan jika objek berada dalam area jangkauan sensor, hasil pembacaan dapat bergantung pada posisi, bentuk, dan permukaan objek serta pantulan ultrasonik yang diterima. 
+
+Oleh karena itu, sensor ultrasonik lebih sesuai untuk mendeteksi keberadaan kendaraan daripada sebagai sensor keselamatan utama. Untuk meningkatkan keselamatan, dapat digunakan **safety photo-eye**. Photo-eye menggunakan transmitter dan receiver inframerah, selama jalur sinyal tidak terhalang, palang dapat menutup, sedangkan objek yang memotong jalur sinyal akan langsung terdeteksi dan dapat menyebabkan palang berhenti atau kembali terbuka.
+
+- **Servo tidak punya umpan balik posisi** 
+
+`waktu_servo_ms` hanya perkiraan dan harus disetel sesuai servo yang dipakai.
+
+- **Sensor jarak tidak mengenal arah dan kecepatan** 
+
+Mobil mundur dan mobil maju terlihat sama. Sensor di bawah palang juga tidak bisa membedakan kendaraan pertama dari kendaraan kedua, sehingga palang yang membuka kembali saat `MENUTUP` bisa ikut meloloskan kendaraan yang mengikuti.
+
+- **Semua angka parameter adalah estimasi**
+
+Nilai seperti 1-1,5s atau 50 cm adalah titik awal hasil perhitungan dan perlu diukur ulang jika akan benar-benar digunakan.
+
+### 6. Rangkuman Perbaikan
+
+| Masalah | Perbaikan |
+|---|---|
+| Interval 100 ms agak lambat | Turunkan ke 50-60 ms, tapi jangan di bawah 30 ms |
+| `pulseIn` timeout terlalu besar | Ganti 25000 menjadi sekitar 5000 (5ms, sekitar 86cm)|
+| Pembacaan jarak sesekali meleset | Debounce: 2-3 pembacaan berturut-turut sebelum mengubah `mobil_dekat` |
+| Mungkin ada objek dibawah palang setelah timer | Tambah state `MENUTUP` dengan auto-reverse |
+| Waktu tutup 3s terlalu lama | Turunkan ke 1-1,5s untuk mobil, lebih pendek untuk motor |
+| Kendaraan kedua ikut masuk | Wajib tap IR ulang untuk setiap kendaraan, dan `mobil_dekat` tidak lagi mengembalikan state dari `JEDA_TUTUP` ke `TERBUKA` |
+| Mobil di bawah palang tidak terlihat, atau palang menutup di atas kendaraan | Tambah sensor di bawah palang dengan variabel terpisah (`mobil_bawah_palang`), palang hanya menutup jika jalur kosong dan membuka kembali (auto-reverse) jika sensor ini aktif saat state `MENUTUP` |
+| Motor berbeda dari mobil | Setel parameter dan posisi sensor per jenis kendaraan, atau pisahkan jalur |

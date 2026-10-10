@@ -425,6 +425,90 @@ Berdasarkan analisa kebutuhan state `TUNGGU_IR` (menunggu konfirmasi sebelum ger
 
 Kendala ini menjadi pembelajaran penting mengenai pentingnya **validasi hardware** sebelum diintegrasikan ke sistem yang lebih besar, serta pertimbangan karakteristik sensor (pasif vs aktif, objek diam vs bergerak) dalam menentukan desain *state machine* yang sesuai.
 
+<<<<<<< HEAD
 ### 5. Kesimpulan Final
 1. Kombinasi sensor **PING))) Ultrasonik + FC-51 IR Obstacle** terbukti paling ideal, tangguh (*robust*), dan andal dibanding PIR untuk kasus deteksi objek pada gerbang otomatis, terutama karena kemampuannya mendeteksi objek diam serta meminimalisir status deteksi yang salah (*false positive*).
 2. Untuk aktuator, **Servo SG90** lebih praktis dan memadai untuk prototipe skala kecil. Sementara **Stepper Motor 28BYJ-48** berpotensi lebih unggul pada skala yang lebih besar dengan beban yang lebih berat, dengan catatan membutuhkan penanganan tambahan untuk kalibrasi posisi (*homing*) dan driver tambahan.
+=======
+**Komponen**
+- 1x Arduino Mega
+- 1x Servo SG-90
+- 1x Infrared Sensor FC-51
+- 1x PING))) Ultrasonic Distance Sensor
+
+**Wiring**
+
+| Arduino Mega | Tersambung ke |
+|---|---|
+| 5V | VCC PING))), VCC FC-51, merah servo |
+| GND | GND PING))), GND FC-51, coklat servo |
+| 2 | OUT FC-51 |
+| 4 | SIG PING))) |
+| 9 | kuning servo (sinyal) |
+
+**Konfigurasi**
+- Library: `Servo.h`, Timer2 dari `avr/interrupt.h`
+- Servo: 0° = tertutup, 90° = terbuka
+- Jarak mobil = 30 cm, interval pembacaan = 100 ms, jeda penutupan = 3000 ms
+- Timer2 mode CTC, prescaler 64, `OCR2A = 249` → interrupt tiap 1 ms
+- Interrupt IR pada pin 2 (mode `FALLING`) — FC-51 HIGH saat normal, LOW saat objek terdeteksi
+- Komunikasi serial 115200 baud
+- Jarak PING))) dihitung dari `durasi / 58` (µs ke cm), timeout `pulseIn` 25 ms
+
+**Cara kerja:** ultrasonik mendeteksi objek dalam jarak < 30 cm → sistem masuk state `TUNGGU_IR` → menunggu konfirmasi dari interrupt IR (FC-51) → servo membuka gerbang. Gerbang menutup otomatis setelah objek pergi dan jeda 3 detik terlampaui.
+
+### 3.2 Stepper Motor Control (Eksperimen Independen)
+
+Eksperimen independen yang mengeksplorasi karakteristik, implementasi, dan setup dari stepper motor.
+
+**Komponen**
+- 1x Arduino Mega
+- 1x 28BYJ-48 Stepper Motor
+- 1x Driver board ULN2003AN
+
+**Wiring**
+
+| Driver Board | Pin Arduino |
+|---|---|
+| IN1 | 8 |
+| IN2 | 9 |
+| IN3 | 10 |
+| IN4 | 11 |
+
+**Konfigurasi**
+- Library: `AccelStepper.h`
+- `MotorInterfaceType = 8` (half step)
+- Steps per revolution = 4096
+- Max speed = 1000 steps/s, max acceleration = 200 steps/s²
+
+**Cara kerja:** mikrokontroler menerima input bilangan integer lewat Serial Monitor, lalu menggerakkan stepper motor ke posisi (step) yang ditunjuk oleh bilangan tersebut. Arah gerakan ditentukan oleh urutan pulsa coil, kecepatan ditentukan oleh frekuensi pulsa — setiap pulsa menggerakkan motor satu step.
+
+---
+
+## 4. Kendala dan Pembelajaran
+
+Modul PIR HC-SR501 yang digunakan mengalami kerusakan — output tetap HIGH secara konstan sehingga sistem selalu mendeteksi adanya gerakan meski tidak ada objek. Pemeriksaan jumper trigger dan pengaturan potensiometer sensitivity/time delay tidak menyelesaikan masalah. Kelompok menyimpulkan modul kemungkinan cacat produksi, dan memutuskan mengganti strategi deteksi menjadi kombinasi **Ultrasonic + IR Obstacle (FC-51)** untuk sistem integrasi akhir.
+
+Kendala ini menjadi pembelajaran penting mengenai pentingnya validasi hardware sebelum diintegrasikan ke sistem yang lebih besar, serta pertimbangan karakteristik sensor (pasif vs aktif, objek diam vs bergerak) dalam menentukan desain state machine yang sesuai.
+
+---
+
+## 5. Kesimpulan
+
+Kombinasi ultrasonik dan IR Obstacle terbukti lebih andal dibanding PIR untuk kasus deteksi objek pada gerbang otomatis, terutama karena kemampuannya mendeteksi objek diam. Untuk aktuator, servo lebih praktis untuk prototipe skala kecil, sementara stepper motor berpotensi lebih unggul pada skala yang lebih besar dengan beban yang lebih berat, dengan catatan membutuhkan penanganan tambahan untuk kalibrasi posisi.
+
+---
+
+## Catatan Tambahan
+- **IR di Wokwi bukan FC-51 asli** 
+
+Receiver IR Wokwi hanya memberi pulsa LOW singkat saat ada sinyal (nilai Command dan Address tidak berpengaruh), sedangkan FC-51 asli tetap LOW selama ada objek. Interrupt `gerakan_ada` bisa menangkap pulsa yang singkat itu, tetapi ini tidak merepresentasikan behavior receiver IR asli.
+
+- **Penggunaan PWM**
+
+Proyek ini tidak memakai PWM hardware. Tidak ada `analogWrite()` sama sekali.
+
+PWM sering disebut dalam pembahasan servo karena sinyal kontrol servo secara konsep mirip PWM, yaitu pulsa diulang setiap 20 ms (50 Hz) dan lebar pulsa menentukan sudut (sekitar 0,5 ms untuk 0° dan 1,5 ms untuk 90°). Namun fitur PWM Arduino tidak kita gunakan. Library `Servo` membangkitkan pulsa itu sendiri dengan interrupt Timer1 pada pin 9, dan kita hanya memanggil `gerbang.write(sudut)`. Timer2 dipakai sebagai penghitung waktu 1 ms (mode CTC), bukan untuk menghasilkan PWM.
+
+Efek sampingnya, library Servo menonaktifkan `analogWrite()` di pin 9 dan 10, dan karena Timer2 dipakai untuk tick, `analogWrite()` di pin 3 dan 11 juga akan bentrok.
+>>>>>>> 8058ecf36d05d691c663ae4a65b0b913279b7acf
