@@ -13,6 +13,10 @@ Smart Gate System adalah sistem tertanam yang mendeteksi keberadaan dan jarak ob
 ## Tujuan
 Mengeksplorasi karakteristik sensor ultrasonik, PIR, dan infrared dalam mendeteksi objek, mengintegrasikannya dengan aktuator (servo dan stepper motor), serta menganalisis spesifikasi teknis dan antarmuka komponen tersebut dengan mikrokontroler Arduino Mega.
 
+## Video Eksperimen
+Dokumentasi dan demonstrasi pengujian eksperimen dapat disaksikan pada tautan berikut:
+* 🎥 **YouTube:** [Video Eksperimen Smart Gate System](https://youtu.be/F8TWS16DrKs?si=oC9zjiBVqPgY0Rur)
+
 --------------------------------------------------------------------------------
 
 ## A. Pendahuluan
@@ -367,6 +371,8 @@ void loop() {
 --------------------------------------------------------------------------------
 
 ## G. Eksperimen Karakterisasi, Analisis Tambahan, & Pembelajaran
+
+> **Video Dokumentasi Eksperimen:** Rekaman proses pengujian dan demonstrasi sistem dapat disaksikan pada [YouTube: Video Eksperimen Smart Gate System](https://youtu.be/F8TWS16DrKs?si=oC9zjiBVqPgY0Rur).
 
 ### 1. Karakterisasi Sensor: PIR vs IR Obstacle
 Dalam rancangan awal, sistem direncanakan menggunakan ultrasonik sebagai penentu jarak dan PIR sebagai konfirmator. Namun dalam proses eksperimen ditemukan karakteristik fundamental yang membedakan kinerja keduanya pada skenario *Smart Gate*:
